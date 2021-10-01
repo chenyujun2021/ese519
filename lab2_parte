@@ -1,0 +1,201 @@
+/*
+ * lab2_parte.c
+ *
+ * Created: 9/29/2021 9:20:32 AM
+ * Author : cheny
+ */ 
+
+
+
+#define F_CPU 16000000UL
+#define BAUD_RATE 9600
+#define BAUD_PRESCALER (((F_CPU / (BAUD_RATE * 16UL))) - 1)
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include "uart.h"
+#include <string.h> 
+
+
+char Strings[25];
+char result[25];
+volatile long edge1=0;
+volatile long period =0;
+volatile int counter =0;
+char* dest="\0";
+volatile char res ='~';
+
+char *alpha[] = {
+	".-",   //A
+	"-...", //B
+	"-.-.", //C
+	"-..",  //D
+	".",    //E
+	"..-.", //F
+	"--.",  //G
+	"....", //H
+	"..",   //I
+	".---", //J
+	"-.-",  //K
+	".-..", //L
+	"--",   //M
+	"-.",   //N
+	"---",  //O
+	".--.", //P
+	"--.-", //Q
+	".-.",  //R
+	"...",  //S
+	"-",    //T
+	"..-",  //U
+	"...-", //V
+	".--",  //W
+	"-..-", //X
+	"-.--", //Y
+	"--..", //Z
+	"-----", //0
+	".----", //1
+	"..---", //2
+	"...--", //3
+	"....-", //4
+	".....", //5
+	"-....", //6
+	"--...", //7
+	"---..", //8
+	"----.", //9
+};
+
+void find(char* dest, char** alpha)
+{
+	for(int i=0; i<36; i++)
+	{
+		if(strcmp(dest, alpha[i])==0)
+		{
+			if(i<26)
+			{
+				char start ='a'+i;
+				res=start;
+			}
+			else
+			{
+				res=i-26+'0';
+			}
+			//sprintf(Strings, "the char is %c\n",start);
+			//UART_putstring(Strings);
+			
+		}
+	}
+}
+
+
+void Initalize()
+{
+	cli();
+	DDRB &= ~(1<<DDB0);
+	DDRB |=(0x30);
+	
+	TCCR1B |=(1<<CS10);
+	TCCR1B &=~(1<<CS11);
+	TCCR1B &=~(1<<CS12);
+	
+	TCCR1A &= ~(1<<WGM10);
+	TCCR1A &= ~(1<<WGM11);
+	TCCR1B &= ~(1<<WGM12);
+	TCCR1B &= ~(1<<WGM13);
+	
+	TCCR1B &=~(1<<ICES1);
+	
+	TIFR1 |= (1<<ICF1);
+	
+	TIMSK1 |= (1<<ICIE1);
+	
+	TIMSK1 |=(1<< TOIE1);
+	
+	sei();
+}
+
+
+ISR(TIMER1_CAPT_vect)
+{
+	if(edge1==0)
+	{
+		edge1=counter*65536+TCNT1;
+		if((counter > 100))
+		{
+			if(res=='~')
+			{
+				sprintf(Strings, " \n");
+				UART_putstring(Strings);
+			}
+			else
+			{
+				//sprintf(Strings, "the char is %c\n",res);
+				//UART_putstring(Strings);
+				res='~';
+			}
+			strcpy(dest, "");
+		}
+	}
+	else
+	{
+		//period=ICR1-edge1+counter*(2^16);
+		period=counter*65536-edge1+TCNT1;
+		//sprintf(Strings, "period is %ld \n ", period);
+		//UART_putstring(Strings);
+		if ((period>480000) && (period<3200000))
+		{
+			PORTB|=0x20;
+			_delay_ms(50);
+			PORTB&=~(0x20);
+			const char* dots =".";
+			strcat(dest, dots);
+			sprintf(result, " %s \n", dest);
+			UART_putstring(result);
+		}
+		else if ((period>320000) && (period<6400000))
+		{
+			PORTB|=0x10;
+			_delay_ms(50);
+			PORTB&=~(0x10);
+			const char* dash ="-";
+			strcat(dest, dash);
+			sprintf(result, " %s \n", dest);
+			UART_putstring(result);
+		}
+		counter =0;
+		edge1=0;
+	}
+	
+	TCCR1B^=(1<<ICES1);
+}
+
+ISR(TIMER1_OVF_vect)
+{
+	
+	if(counter>100 && (edge1==0))
+	{
+		find(dest, alpha);
+		if(res!='~')
+		{
+			sprintf(Strings, "the char is %c\n",res);
+			UART_putstring(Strings);
+		}
+		res='~';
+		strcpy(dest, "");
+	}
+	counter++;
+	
+}
+
+int main(void)
+{
+	UART_init(BAUD_PRESCALER);
+	Initalize();
+    while (1) 
+    {
+		
+    }
+}
+		
